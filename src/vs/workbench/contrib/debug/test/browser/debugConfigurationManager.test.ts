@@ -211,7 +211,7 @@ suite('debugConfigurationManager', () => {
 				configurations: [{ name: 'User', type: 'node', request: 'launch', program: 'user.js' }]
 			});
 			await configurationService.setUserConfiguration('folderLaunch', {
-				configurations: [{ name: 'A', type: 'node', request: 'launch' }]
+				configurations: [{ name: 'A', type: 'node', request: 'launch' }, { name: 'B', type: 'node', request: 'launch' }]
 			});
 			await configurationService.setUserConfiguration('workspaceLaunch', {
 				configurations: [{ name: 'Workspace', type: 'node', request: 'launch', program: 'workspace.js' }]
@@ -233,6 +233,25 @@ suite('debugConfigurationManager', () => {
 				affectedKeys: new Set(['launch']),
 				change: { keys: ['launch'], overrides: [] },
 				affectsConfiguration: section => section === 'launch'
+			});
+		}
+
+		for (const source of [ConfigurationTarget.USER, ConfigurationTarget.WORKSPACE, ConfigurationTarget.WORKSPACE_FOLDER]) {
+			test(`keeps a non-first folder configuration selected after a ${ConfigurationTargetToString(source)} launch change`, async () => {
+				const launch = _debugConfigurationManager.getLaunches().find(l => l.workspace?.uri.toString() === folderUri.toString())!;
+				await _debugConfigurationManager.selectConfiguration(launch, 'B');
+
+				fireLaunchChange(source);
+
+				assert.deepStrictEqual({
+					uri: _debugConfigurationManager.selectedConfiguration.launch?.uri.toString(),
+					name: _debugConfigurationManager.selectedConfiguration.name,
+					config: await _debugConfigurationManager.selectedConfiguration.getConfig()
+				}, {
+					uri: launch.uri.toString(),
+					name: 'B',
+					config: { name: 'B', type: 'node', request: 'launch', __configurationTarget: ConfigurationTarget.WORKSPACE_FOLDER }
+				});
 			});
 		}
 
