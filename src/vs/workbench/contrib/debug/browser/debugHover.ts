@@ -284,7 +284,22 @@ export class DebugHoverWidget implements IContentWidget {
 			options: DebugHoverWidget._HOVER_HIGHLIGHT_DECORATION_OPTIONS
 		}]);
 
-		return this.doShow(session, result.range.getStartPosition(), expression, focus, mouseEvent);
+		return this.doShow(session, this.getAnchorPosition(result.range, position), expression, focus, mouseEvent);
+	}
+
+	/**
+	 * Where to anchor the hover widget. Normally this is the start of the evaluated
+	 * range, but when the expression spans several lines that start can be far from
+	 * the pointer, so anchor at the word under the pointer instead.
+	 */
+	private getAnchorPosition(range: Range, hovered: Position): Position {
+		if (range.startLineNumber === range.endLineNumber || !this.editor.hasModel()) {
+			return range.getStartPosition();
+		}
+
+		const word = this.editor.getModel().getWordAtPosition(hovered);
+		const anchor = word ? new Position(hovered.lineNumber, word.startColumn) : hovered;
+		return range.containsPosition(anchor) ? anchor : range.getStartPosition();
 	}
 
 	private static readonly _HOVER_HIGHLIGHT_DECORATION_OPTIONS = ModelDecorationOptions.register({
