@@ -5,8 +5,10 @@
 
 import assert from 'assert';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
+import { Position } from '../../../../../editor/common/core/position.js';
+import { Range } from '../../../../../editor/common/core/range.js';
 import { NullLogService } from '../../../../../platform/log/common/log.js';
-import { findExpressionInStackFrame } from '../../browser/debugHover.js';
+import { findExpressionInStackFrame, getHoverAnchorPosition } from '../../browser/debugHover.js';
 import type { IExpression, IScope } from '../../common/debug.js';
 import { Scope, StackFrame, Thread, Variable } from '../../common/debugModel.js';
 import { Source } from '../../common/debugSource.js';
@@ -63,5 +65,32 @@ suite('Debug - Hover', () => {
 		// We do not search in expensive scopes
 		scope.expensive = true;
 		assert.strictEqual(await findExpressionInStackFrame(stackFrame, ['A']), undefined);
+	});
+
+	suite('getHoverAnchorPosition', () => {
+		// Models `    instance.value` style lines: word starts at column 5 on every line.
+		const model = {
+			getWordAtPosition: (p: Position) => p.column >= 5 && p.column <= 10 ? { word: 'value', startColumn: 5, endColumn: 10 } : null
+		};
+
+		test('single-line range anchors at range start', () => {
+			const range = new Range(3, 2, 3, 20);
+			assert.deepStrictEqual(getHoverAnchorPosition(range, new Position(3, 7), model), new Position(3, 2));
+		});
+
+		test('multi-line range anchors at the word under the pointer', () => {
+			const range = new Range(1, 1, 5, 20);
+			assert.deepStrictEqual(getHoverAnchorPosition(range, new Position(5, 7), model), new Position(5, 5));
+		});
+
+		test('multi-line range without a word anchors at the pointer', () => {
+			const range = new Range(1, 1, 5, 20);
+			assert.deepStrictEqual(getHoverAnchorPosition(range, new Position(5, 15), model), new Position(5, 15));
+		});
+
+		test('falls back to range start if the anchor is outside the range', () => {
+			const range = new Range(1, 1, 5, 4);
+			assert.deepStrictEqual(getHoverAnchorPosition(range, new Position(5, 9), model), new Position(1, 1));
+		});
 	});
 });

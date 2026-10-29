@@ -23,6 +23,7 @@ import { ConfigurationChangedEvent, EditorOption } from '../../../../editor/comm
 import { IDimension } from '../../../../editor/common/core/2d/dimension.js';
 import { Position } from '../../../../editor/common/core/position.js';
 import { Range } from '../../../../editor/common/core/range.js';
+import { ITextModel } from '../../../../editor/common/model.js';
 import { IEditorDecorationsCollection } from '../../../../editor/common/editorCommon.js';
 import { ModelDecorationOptions } from '../../../../editor/common/model/textModel.js';
 import { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
@@ -75,6 +76,21 @@ export async function findExpressionInStackFrame(stackFrame: IStackFrame, namesT
 
 	// only show if all expressions found have the same value
 	return expressions.length > 0 && expressions.every(e => e.value === expressions[0].value) ? expressions[0] : undefined;
+}
+
+/**
+ * Where to anchor the hover widget. Normally this is the start of the evaluated
+ * range, but when the expression spans several lines that start can be far from
+ * the pointer, so anchor at the word under the pointer instead.
+ */
+export function getHoverAnchorPosition(range: Range, hovered: Position, model: Pick<ITextModel, 'getWordAtPosition'>): Position {
+	if (range.startLineNumber === range.endLineNumber) {
+		return range.getStartPosition();
+	}
+
+	const word = model.getWordAtPosition(hovered);
+	const anchor = word ? new Position(hovered.lineNumber, word.startColumn) : hovered;
+	return range.containsPosition(anchor) ? anchor : range.getStartPosition();
 }
 
 export class DebugHoverWidget implements IContentWidget {
@@ -284,22 +300,7 @@ export class DebugHoverWidget implements IContentWidget {
 			options: DebugHoverWidget._HOVER_HIGHLIGHT_DECORATION_OPTIONS
 		}]);
 
-		return this.doShow(session, this.getAnchorPosition(result.range, position), expression, focus, mouseEvent);
-	}
-
-	/**
-	 * Where to anchor the hover widget. Normally this is the start of the evaluated
-	 * range, but when the expression spans several lines that start can be far from
-	 * the pointer, so anchor at the word under the pointer instead.
-	 */
-	private getAnchorPosition(range: Range, hovered: Position): Position {
-		if (range.startLineNumber === range.endLineNumber || !this.editor.hasModel()) {
-			return range.getStartPosition();
-		}
-
-		const word = this.editor.getModel().getWordAtPosition(hovered);
-		const anchor = word ? new Position(hovered.lineNumber, word.startColumn) : hovered;
-		return range.containsPosition(anchor) ? anchor : range.getStartPosition();
+		return this.doShow(session, getHoverAnchorPosition(result.range, position, this.editor.getModel()), expression, focus, mouseEvent);
 	}
 
 	private static readonly _HOVER_HIGHLIGHT_DECORATION_OPTIONS = ModelDecorationOptions.register({
