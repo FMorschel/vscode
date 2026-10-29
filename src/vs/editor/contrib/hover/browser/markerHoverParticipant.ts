@@ -97,7 +97,11 @@ export class MarkerHoverParticipant implements IEditorHoverParticipant<MarkerHov
 			result.push(new MarkerHover(this, range, marker));
 		}
 
-		return result;
+		// Most severe first, then by position in the line
+		return result.sort((a, b) =>
+			MarkerSeverity.compare(a.marker.severity, b.marker.severity)
+			|| Range.compareRangesUsingStarts(a.range, b.range)
+		);
 	}
 
 	public renderHoverParts(context: IEditorHoverRenderContext, hoverParts: MarkerHover[]): IRenderedHoverParts<MarkerHover> {
@@ -110,7 +114,7 @@ export class MarkerHoverParticipant implements IEditorHoverParticipant<MarkerHov
 			context.fragment.appendChild(renderedMarkerHover.hoverElement);
 			renderedHoverParts.push(renderedMarkerHover);
 		});
-		const markerHoverForStatusbar = hoverParts.length === 1 ? hoverParts[0] : hoverParts.sort((a, b) => MarkerSeverity.compare(a.marker.severity, b.marker.severity))[0];
+		const markerHoverForStatusbar = hoverParts.length === 1 ? hoverParts[0] : [...hoverParts].sort((a, b) => MarkerSeverity.compare(a.marker.severity, b.marker.severity))[0];
 		const disposables = this._renderMarkerStatusbar(context, markerHoverForStatusbar);
 		return new RenderedHoverParts(renderedHoverParts, disposables);
 	}
@@ -130,6 +134,12 @@ export class MarkerHoverParticipant implements IEditorHoverParticipant<MarkerHov
 		const { source, message, code, relatedInformation } = markerHover.marker;
 
 		this._editor.applyFontInfo(markerElement);
+		const severityIcon = this._getSeverityIcon(markerHover.marker.severity);
+		if (severityIcon) {
+			const iconElement = dom.append(markerElement, $('span.marker-severity-icon'));
+			iconElement.classList.add(...ThemeIcon.asClassNameArray(severityIcon));
+			iconElement.setAttribute('aria-hidden', 'true');
+		}
 		const messageElement = dom.append(markerElement, $('span'));
 		messageElement.style.whiteSpace = 'pre-wrap';
 		messageElement.innerText = message;
@@ -195,6 +205,15 @@ export class MarkerHoverParticipant implements IEditorHoverParticipant<MarkerHov
 			dispose: () => disposables.dispose()
 		};
 		return renderedHoverPart;
+	}
+
+	private _getSeverityIcon(severity: MarkerSeverity): ThemeIcon | undefined {
+		switch (severity) {
+			case MarkerSeverity.Error: return Codicon.error;
+			case MarkerSeverity.Warning: return Codicon.warning;
+			case MarkerSeverity.Info: return Codicon.info;
+			default: return undefined;
+		}
 	}
 
 	private _renderMarkerStatusbar(context: IEditorHoverRenderContext, markerHover: MarkerHover): IDisposable {

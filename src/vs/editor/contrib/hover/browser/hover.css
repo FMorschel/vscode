@@ -119,3 +119,20 @@
 	font-size: 16px;
 	color: var(--vscode-foreground);
 }
+
+.monaco-editor .monaco-hover .hover-row .marker .marker-severity-icon {
+	margin-right: 4px;
+	vertical-align: text-bottom;
+}
+
+.monaco-editor .monaco-hover .hover-row .marker .marker-severity-icon.codicon-error {
+	color: var(--vscode-problemsErrorIcon-foreground);
+}
+
+.monaco-editor .monaco-hover .hover-row .marker .marker-severity-icon.codicon-warning {
+	color: var(--vscode-problemsWarningIcon-foreground);
+}
+
+.monaco-editor .monaco-hover .hover-row .marker .marker-severity-icon.codicon-info {
+	color: var(--vscode-problemsInfoIcon-foreground);
+}
