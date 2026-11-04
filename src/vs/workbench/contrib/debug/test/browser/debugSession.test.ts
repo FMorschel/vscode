@@ -5,12 +5,24 @@
 
 import assert from 'assert';
 import { Event } from '../../../../../base/common/event.js';
+import { generateUuid } from '../../../../../base/common/uuid.js';
+import { upcastPartial } from '../../../../../base/test/common/mock.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
+import { TestAccessibilityService } from '../../../../../platform/accessibility/test/common/testAccessibilityService.js';
+import { TestConfigurationService } from '../../../../../platform/configuration/test/common/testConfigurationService.js';
+import { IExtensionHostDebugService } from '../../../../../platform/debug/common/extensionHostDebug.js';
+import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
+import { TestInstantiationService } from '../../../../../platform/instantiation/test/common/instantiationServiceMock.js';
+import { NullLogService } from '../../../../../platform/log/common/log.js';
+import { INotificationService } from '../../../../../platform/notification/common/notification.js';
+import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
+import { IProductService } from '../../../../../platform/product/common/productService.js';
 import { DebugSession, ThreadStatusScheduler } from '../../browser/debugSession.js';
 import { RawDebugSession } from '../../browser/rawDebugSession.js';
+import { IDebugger, IDebugService, IViewModel } from '../../common/debug.js';
 import { MockDebugAdapter } from '../common/mockDebug.js';
 import { createTestSession } from './callStack.test.js';
-import { createMockDebugModel } from './mockDebugModel.js';
+import { createMockDebugModel, mockUriIdentityService } from './mockDebugModel.js';
 
 
 suite('DebugSession - ThreadStatusScheduler', () => {
@@ -206,5 +218,143 @@ suite('DebugSession - continued events', () => {
 		await continued;
 
 		assert.strictEqual(session.getStoppedDetails(), undefined);
+	});
+});
+
+/**
+ * Debug adapter that answers the requests a session lifecycle needs and lets
+ * the test decide when (or whether) the adapter reports that the debuggee terminated.
+ */
+class LifecycleDebugAdapter extends MockDebugAdapter {
+	readonly requests: string[] = [];
+
+	constructor(
+		private readonly capabilities: DebugProtocol.Capabilities,
+		private readonly terminatedOnTerminateRequest: boolean,
+	) {
+		super();
+	}
+
+	override sendMessage(message: DebugProtocol.ProtocolMessage): void {
+		if (message.type === 'request') {
+			const request = message as DebugProtocol.Request;
+			this.requests.push(request.command);
+			if (request.command === 'initialize') {
+				setTimeout(() => this.sendResponseBody(request, this.capabilities), 0);
+				return;
+			}
+			if (request.command === 'terminate') {
+				setTimeout(() => {
+					this.sendResponseBody(request, {});
+					if (this.terminatedOnTerminateRequest) {
+						this.sendTerminated();
+					}
+				}, 0);
+				return;
+			}
+		}
+		super.sendMessage(message);
+	}
+
+	sendTerminated(): void {
+		this.sendEventBody('terminated', {});
+	}
+}
+
+suite('DebugSession - restart without restart request', () => {
+	let session: DebugSession | undefined;
+
+	teardown(async () => {
+		await session?.disconnect();
+		session = undefined;
+	});
+
+	const ds = ensureNoDisposablesAreLeakedInTestSuite();
+
+	function createSession(adapters: LifecycleDebugAdapter[]) {
+		const model = createMockDebugModel(ds);
+		const instantiationService = ds.add(new TestInstantiationService());
+		instantiationService.stub(IExtensionHostDebugService, {});
+		instantiationService.stub(IOpenerService, {});
+		instantiationService.stub(INotificationService, {});
+		instantiationService.stub(IDialogService, {});
+
+		const debugService = upcastPartial<IDebugService>({
+			getModel: () => model,
+			getViewModel: () => upcastPartial<IViewModel>({ updateViews: () => { } }),
+			setExceptionBreakpointsForSession: () => { },
+			focusStackFrame: async () => { },
+		});
+		const productService = upcastPartial<IProductService>({ nameLong: 'Test' });
+		session = ds.add(new DebugSession(generateUuid(), { resolved: { name: 'restartSession', type: 'mock', request: 'launch' }, unresolved: undefined }, undefined, model, undefined, debugService, undefined!, undefined!, new TestConfigurationService({ debug: { console: { collapseIdenticalLines: true } } }), undefined!, undefined!, productService, undefined!, undefined!, mockUriIdentityService, instantiationService, undefined!, undefined!, new NullLogService(), undefined!, undefined!, new TestAccessibilityService()));
+		model.addSession(session);
+
+		const pending = adapters.slice();
+		for (const adapter of adapters) {
+			ds.add(adapter);
+		}
+		const dbgr = upcastPartial<IDebugger>({
+			type: 'mock',
+			createDebugAdapter: async () => pending.shift()!,
+		});
+
+		let endedAdapters = 0;
+		ds.add(session.onDidEndAdapter(() => endedAdapters++));
+
+		return { session, dbgr, endedAdapters: () => endedAdapters };
+	}
+
+	// DebugService.restartSession does this for adapters without supportsRestartRequest:
+	// `await session.terminate(true)`, a short fixed delay, then `session.initialize()` on the same session.
+
+	test('reports the end of the previous run when the adapter is disconnected', async () => {
+		const first = new LifecycleDebugAdapter({}, false);
+		const second = new LifecycleDebugAdapter({}, false);
+		const { session, dbgr, endedAdapters } = createSession([first, second]);
+		await session.initialize(dbgr);
+
+		await session.terminate(true);
+		assert.deepStrictEqual(first.requests, ['initialize', 'disconnect']);
+		assert.strictEqual(endedAdapters(), 1);
+
+		await session.initialize(dbgr);
+		assert.strictEqual(endedAdapters(), 1);
+	});
+
+	test('reports the end of the previous run when the adapter terminates before the relaunch', async () => {
+		const first = new LifecycleDebugAdapter({ supportsTerminateRequest: true }, true);
+		const second = new LifecycleDebugAdapter({ supportsTerminateRequest: true }, true);
+		const { session, dbgr, endedAdapters } = createSession([first, second]);
+		await session.initialize(dbgr);
+
+		const ended = Event.toPromise(session.onDidEndAdapter);
+		await session.terminate(true);
+		await ended;
+		assert.deepStrictEqual(first.requests, ['initialize', 'terminate', 'disconnect']);
+		assert.strictEqual(endedAdapters(), 1);
+
+		await session.initialize(dbgr);
+		assert.strictEqual(endedAdapters(), 1);
+	});
+
+	test('reports the end of the previous run when the relaunch happens before the adapter terminates (#246811)', async () => {
+		const first = new LifecycleDebugAdapter({ supportsTerminateRequest: true }, false);
+		const second = new LifecycleDebugAdapter({ supportsTerminateRequest: true }, false);
+		const { session, dbgr, endedAdapters } = createSession([first, second]);
+		await session.initialize(dbgr);
+
+		// The adapter acknowledged 'terminate' but has not sent 'terminated' yet.
+		await session.terminate(true);
+		assert.deepStrictEqual(first.requests, ['initialize', 'terminate']);
+		assert.strictEqual(endedAdapters(), 0);
+
+		await session.initialize(dbgr);
+		assert.strictEqual(endedAdapters(), 1, 'the previous run must report its end before the session is reused, as it does when the adapter terminates first');
+
+		// A late 'terminated' from the previous adapter must not end the new run.
+		first.sendTerminated();
+		await new Promise(resolve => setTimeout(resolve, 0));
+		assert.strictEqual(endedAdapters(), 1);
+		assert.deepStrictEqual(second.requests, ['initialize']);
 	});
 });
