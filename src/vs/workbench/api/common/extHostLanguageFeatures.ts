@@ -2994,6 +2994,13 @@ export class ExtHostLanguageFeatures extends CoreDisposable implements extHostPr
 		return onEnterRules.map(ExtHostLanguageFeatures._serializeOnEnterRule);
 	}
 
+	private static _serializeOnDeleteRules(onDeleteRules: vscode.OnDeleteRule[]): extHostProtocol.IOnDeleteRuleDto[] {
+		return onDeleteRules.map(onDeleteRule => ({
+			beforeText: onDeleteRule.beforeText ? ExtHostLanguageFeatures._serializeRegExp(onDeleteRule.beforeText) : undefined,
+			afterText: ExtHostLanguageFeatures._serializeRegExp(onDeleteRule.afterText),
+		}));
+	}
+
 	private static _serializeAutoClosingPair(autoClosingPair: vscode.AutoClosingPair): IAutoClosingPairConditional {
 		return {
 			open: autoClosingPair.open,
@@ -3038,6 +3045,7 @@ export class ExtHostLanguageFeatures extends CoreDisposable implements extHostPr
 			wordPattern: configuration.wordPattern ? ExtHostLanguageFeatures._serializeRegExp(configuration.wordPattern) : undefined,
 			indentationRules: configuration.indentationRules ? ExtHostLanguageFeatures._serializeIndentationRule(configuration.indentationRules) : undefined,
 			onEnterRules: configuration.onEnterRules ? ExtHostLanguageFeatures._serializeOnEnterRules(configuration.onEnterRules) : undefined,
+			onDeleteRules: configuration.onDeleteRules && isProposedApiEnabled(extension, 'languageConfigurationOnDelete') ? ExtHostLanguageFeatures._serializeOnDeleteRules(configuration.onDeleteRules) : undefined,
 			__electricCharacterSupport: configuration.__electricCharacterSupport,
 			__characterPairSupport: configuration.__characterPairSupport,
 			autoClosingPairs: configuration.autoClosingPairs ? ExtHostLanguageFeatures._serializeAutoClosingPairs(configuration.autoClosingPairs) : undefined,

@@ -3427,6 +3427,149 @@ suite('Editor Controller', () => {
 		});
 	});
 
+	suite('onDeleteRules', () => {
+
+		function setupOnDeleteLanguage(languageId: string): void {
+			disposables.add(languageService.registerLanguage({ id: languageId }));
+			disposables.add(languageConfigurationService.register(languageId, {
+				onDeleteRules: [{
+					beforeText: /^\s*\/\/\//,
+					afterText: /^\s*\/\/\//
+				}]
+			}));
+		}
+
+		test('Delete at end of line strips the comment leader of the next line', () => {
+			const languageId = 'onDeleteMode1';
+			setupOnDeleteLanguage(languageId);
+			usingCursor({
+				text: [
+					'/// This line',
+					'/// More text',
+					'class Foo;'
+				],
+				languageId: languageId,
+			}, (editor, model, viewModel) => {
+				moveTo(editor, viewModel, 1, 14);
+				editor.runCommand(CoreEditingCommands.DeleteRight, null);
+				assert.strictEqual(model.getLineContent(1), '/// This line More text');
+				assert.strictEqual(model.getLineContent(2), 'class Foo;');
+				assertCursor(viewModel, new Position(1, 14));
+			});
+		});
+
+		test('Delete does not strip when beforeText does not match', () => {
+			const languageId = 'onDeleteMode2';
+			setupOnDeleteLanguage(languageId);
+			usingCursor({
+				text: [
+					'foo',
+					'/// More text'
+				],
+				languageId: languageId,
+			}, (editor, model, viewModel) => {
+				moveTo(editor, viewModel, 1, 4);
+				editor.runCommand(CoreEditingCommands.DeleteRight, null);
+				assert.strictEqual(model.getLineContent(1), 'foo/// More text');
+			});
+		});
+
+		test('Backspace at start of line strips the comment leader', () => {
+			const languageId = 'onDeleteMode3';
+			setupOnDeleteLanguage(languageId);
+			usingCursor({
+				text: [
+					'/// This line',
+					'/// More text'
+				],
+				languageId: languageId,
+			}, (editor, model, viewModel) => {
+				moveTo(editor, viewModel, 2, 1);
+				editor.runCommand(CoreEditingCommands.DeleteLeft, null);
+				assert.strictEqual(model.getLineCount(), 1);
+				assert.strictEqual(model.getLineContent(1), '/// This line More text');
+				assertCursor(viewModel, new Position(1, 14));
+			});
+		});
+
+		test('Delete with trimWhitespaceOnDelete strips only the leader matched by the rule', () => {
+			const languageId = 'onDeleteMode5';
+			setupOnDeleteLanguage(languageId);
+			usingCursor({
+				text: [
+					'/// This line',
+					'    ///   More text'
+				],
+				languageId: languageId,
+				editorOpts: { trimWhitespaceOnDelete: true },
+			}, (editor, model, viewModel) => {
+				moveTo(editor, viewModel, 1, 14);
+				editor.runCommand(CoreEditingCommands.DeleteRight, null);
+				assert.strictEqual(model.getLineContent(1), '/// This line   More text');
+			});
+		});
+
+		test('trimWhitespaceOnDelete without rules is unchanged', () => {
+			usingCursor({
+				text: [
+					'foo',
+					'    bar',
+					'',
+					'    baz'
+				],
+				editorOpts: { trimWhitespaceOnDelete: true },
+			}, (editor, model, viewModel) => {
+				moveTo(editor, viewModel, 1, 4);
+				editor.runCommand(CoreEditingCommands.DeleteRight, null);
+				assert.strictEqual(model.getLineContent(1), 'foobar');
+
+				// the current line has no content: the whitespace of the next line is kept
+				moveTo(editor, viewModel, 2, 1);
+				editor.runCommand(CoreEditingCommands.DeleteRight, null);
+				assert.strictEqual(model.getLineContent(2), '    baz');
+			});
+		});
+
+		test('Delete strips the leader for every cursor', () => {
+			const languageId = 'onDeleteMode6';
+			setupOnDeleteLanguage(languageId);
+			usingCursor({
+				text: [
+					'/// a',
+					'/// b',
+					'x',
+					'/// c',
+					'/// d'
+				],
+				languageId: languageId,
+			}, (editor, model, viewModel) => {
+				viewModel.setSelections('test', [new Selection(1, 6, 1, 6), new Selection(4, 6, 4, 6)]);
+				editor.runCommand(CoreEditingCommands.DeleteRight, null);
+				assert.deepStrictEqual(model.getLinesContent(), [
+					'/// a b',
+					'x',
+					'/// c d'
+				]);
+			});
+		});
+
+		test('Delete in the middle of a line is unaffected', () => {
+			const languageId = 'onDeleteMode4';
+			setupOnDeleteLanguage(languageId);
+			usingCursor({
+				text: [
+					'/// This line',
+					'/// More text'
+				],
+				languageId: languageId,
+			}, (editor, model, viewModel) => {
+				moveTo(editor, viewModel, 1, 5);
+				editor.runCommand(CoreEditingCommands.DeleteRight, null);
+				assert.strictEqual(model.getLineContent(1), '/// his line');
+			});
+		});
+	});
+
 	test('issue #6862: Editor removes auto inserted indentation when formatting on type', () => {
 		const languageId = setupOnEnterLanguage(IndentAction.IndentOutdent);
 		usingCursor({

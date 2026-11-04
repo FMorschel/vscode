@@ -8,7 +8,7 @@ import { ParseError, parse, getNodeType } from '../../../../base/common/json.js'
 import { IJSONSchema } from '../../../../base/common/jsonSchema.js';
 import * as types from '../../../../base/common/types.js';
 import { URI } from '../../../../base/common/uri.js';
-import { CharacterPair, CommentRule, EnterAction, ExplicitLanguageConfiguration, FoldingMarkers, FoldingRules, IAutoClosingPair, IAutoClosingPairConditional, IndentAction, IndentationRule, OnEnterRule } from '../../../../editor/common/languages/languageConfiguration.js';
+import { CharacterPair, CommentRule, EnterAction, ExplicitLanguageConfiguration, FoldingMarkers, FoldingRules, IAutoClosingPair, IAutoClosingPairConditional, IndentAction, IndentationRule, OnDeleteRule, OnEnterRule } from '../../../../editor/common/languages/languageConfiguration.js';
 import { ILanguageConfigurationService } from '../../../../editor/common/languages/languageConfigurationRegistry.js';
 import { ILanguageService } from '../../../../editor/common/languages/language.js';
 import { Extensions, IJSONContributionRegistry } from '../../../../platform/jsonschemas/common/jsonContributionRegistry.js';
@@ -44,6 +44,11 @@ interface IOnEnterRule {
 	action: IEnterAction;
 }
 
+interface IOnDeleteRule {
+	beforeText?: string | IRegExp;
+	afterText: string | IRegExp;
+}
+
 /**
  * Serialized form of a language configuration
  */
@@ -64,6 +69,7 @@ export interface ILanguageConfiguration {
 	};
 	autoCloseBefore?: string;
 	onEnterRules?: IOnEnterRule[];
+	onDeleteRules?: IOnDeleteRule[];
 }
 
 function isStringArr(something: string[] | null): something is string[] {
@@ -396,6 +402,41 @@ export class LanguageConfigurationFileHandler extends Disposable {
 		return result;
 	}
 
+	private static _extractValidOnDeleteRules(languageId: string, configuration: ILanguageConfiguration): OnDeleteRule[] | undefined {
+		const source = configuration.onDeleteRules;
+		if (typeof source === 'undefined') {
+			return undefined;
+		}
+		if (!Array.isArray(source)) {
+			console.warn(`[${languageId}]: language configuration: expected \`onDeleteRules\` to be an array.`);
+			return undefined;
+		}
+
+		let result: OnDeleteRule[] | undefined = undefined;
+		for (let i = 0, len = source.length; i < len; i++) {
+			const onDeleteRule = source[i];
+			if (!types.isObject(onDeleteRule)) {
+				console.warn(`[${languageId}]: language configuration: expected \`onDeleteRules[${i}]\` to be an object.`);
+				continue;
+			}
+			const afterText = this._parseRegex(languageId, `onDeleteRules[${i}].afterText`, onDeleteRule.afterText);
+			if (!afterText) {
+				continue;
+			}
+			const resultingOnDeleteRule: OnDeleteRule = { afterText };
+			if (onDeleteRule.beforeText) {
+				const beforeText = this._parseRegex(languageId, `onDeleteRules[${i}].beforeText`, onDeleteRule.beforeText);
+				if (beforeText) {
+					resultingOnDeleteRule.beforeText = beforeText;
+				}
+			}
+			result = result || [];
+			result.push(resultingOnDeleteRule);
+		}
+
+		return result;
+	}
+
 	public static extractValidConfig(languageId: string, configuration: ILanguageConfiguration): ExplicitLanguageConfiguration {
 
 		const comments = this._extractValidCommentRule(languageId, configuration);
@@ -418,6 +459,7 @@ export class LanguageConfigurationFileHandler extends Disposable {
 			};
 		}
 		const onEnterRules = this._extractValidOnEnterRules(languageId, configuration);
+		const onDeleteRules = this._extractValidOnDeleteRules(languageId, configuration);
 
 		const richEditConfig: ExplicitLanguageConfiguration = {
 			comments,
@@ -425,6 +467,7 @@ export class LanguageConfigurationFileHandler extends Disposable {
 			wordPattern,
 			indentationRules,
 			onEnterRules,
+			onDeleteRules,
 			autoClosingPairs,
 			surroundingPairs,
 			colorizedBracketPairs,
@@ -879,8 +922,55 @@ const schema: IJSONSchema = {
 						}
 					}
 				}
+				}
+			},
+			onDeleteRules: {
+				type: 'array',
+				description: nls.localize('schema.onDeleteRules', 'The language\'s rules to be evaluated when two lines are joined by pressing Delete at the end of a line or Backspace at the start of one.'),
+				items: {
+					type: 'object',
+					description: nls.localize('schema.onDeleteRules.item', 'A rule to be evaluated when two lines are joined.'),
+					required: ['afterText'],
+					properties: {
+						beforeText: {
+							type: ['string', 'object'],
+							description: nls.localize('schema.onDeleteRules.beforeText', 'This rule will only execute if the text of the first line (the one that stays above) matches this regular expression.'),
+							properties: {
+								pattern: {
+									type: 'string',
+									description: nls.localize('schema.onDeleteRules.beforeText.pattern', 'The RegExp pattern for beforeText.'),
+									default: '',
+								},
+								flags: {
+									type: 'string',
+									description: nls.localize('schema.onDeleteRules.beforeText.flags', 'The RegExp flags for beforeText.'),
+									default: '',
+									pattern: '^([gimuy]+)$',
+									patternErrorMessage: nls.localize('schema.onDeleteRules.beforeText.errorMessage', 'Must match the pattern `/^([gimuy]+)$/`.')
+								}
+							}
+						},
+						afterText: {
+							type: ['string', 'object'],
+							description: nls.localize('schema.onDeleteRules.afterText', 'This rule will only execute if the text of the second line (the one merged up) matches this regular expression at its start. The matched text, such as a comment leader, is removed when the lines are joined.'),
+							properties: {
+								pattern: {
+									type: 'string',
+									description: nls.localize('schema.onDeleteRules.afterText.pattern', 'The RegExp pattern for afterText.'),
+									default: '',
+								},
+								flags: {
+									type: 'string',
+									description: nls.localize('schema.onDeleteRules.afterText.flags', 'The RegExp flags for afterText.'),
+									default: '',
+									pattern: '^([gimuy]+)$',
+									patternErrorMessage: nls.localize('schema.onDeleteRules.afterText.errorMessage', 'Must match the pattern `/^([gimuy]+)$/`.')
+								}
+							}
+						}
+					}
+				}
 			}
-		}
 
 	}
 };

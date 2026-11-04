@@ -48,6 +48,14 @@ export class DeleteOperations {
 		const position = selection.getPosition();
 		const rightOfPosition = MoveOperations.right(config, model, position);
 
+		if (rightOfPosition.lineNumber !== position.lineNumber) {
+			// Delete at the end of a line: strip a leader declared by the language's `onDeleteRules`
+			const stripLength = DeleteOperations._getOnDeleteStripLength(config, model, position.lineNumber);
+			if (stripLength > 0) {
+				return new Range(rightOfPosition.lineNumber, 1 + stripLength, position.lineNumber, position.column);
+			}
+		}
+
 		if (config.trimWhitespaceOnDelete && rightOfPosition.lineNumber !== position.lineNumber) {
 			// Smart line join (deleting leading whitespace) is on
 			// (and) Delete is happening at the end of a line
@@ -70,6 +78,18 @@ export class DeleteOperations {
 			position.lineNumber,
 			position.column
 		);
+	}
+
+	/**
+	 * The length of the leader to strip from the start of line `lineNumber + 1` when it is joined
+	 * to line `lineNumber`, as declared by the language's `onDeleteRules`.
+	 */
+	private static _getOnDeleteStripLength(config: CursorConfiguration, model: ICursorSimpleModel, lineNumber: number): number {
+		if (model.getLineFirstNonWhitespaceColumn(lineNumber) === 0) {
+			// The line has no content to merge into, so the leader must stay
+			return 0;
+		}
+		return config.getOnDeleteTextToStrip(model.getLineContent(lineNumber), model.getLineContent(lineNumber + 1));
 	}
 
 	public static isAutoClosingPairDelete(
@@ -213,6 +233,15 @@ export class DeleteOperations {
 				const toVisibleColumn = CursorColumns.prevIndentTabStop(fromVisibleColumn, config.indentSize);
 				const toColumn = config.columnFromVisibleColumn(model, position.lineNumber, toVisibleColumn);
 				return new Range(position.lineNumber, toColumn, position.lineNumber, position.column);
+			}
+		}
+
+		if (position.column === 1 && position.lineNumber > 1) {
+			// Backspace at the start of a line: strip a leader declared by the language's `onDeleteRules`
+			const previousLineNumber = position.lineNumber - 1;
+			const stripLength = DeleteOperations._getOnDeleteStripLength(config, model, previousLineNumber);
+			if (stripLength > 0) {
+				return new Range(previousLineNumber, model.getLineMaxColumn(previousLineNumber), position.lineNumber, 1 + stripLength);
 			}
 		}
 

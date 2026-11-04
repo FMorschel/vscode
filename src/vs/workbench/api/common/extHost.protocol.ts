@@ -400,12 +400,17 @@ export interface IOnEnterRuleDto {
 	previousLineText?: IRegExpDto;
 	action: EnterAction;
 }
+export interface IOnDeleteRuleDto {
+	beforeText?: IRegExpDto;
+	afterText: IRegExpDto;
+}
 export interface ILanguageConfigurationDto {
 	comments?: CommentRule;
 	brackets?: CharacterPair[];
 	wordPattern?: IRegExpDto;
 	indentationRules?: IIndentationRuleDto;
 	onEnterRules?: IOnEnterRuleDto[];
+	onDeleteRules?: IOnDeleteRuleDto[];
 	__electricCharacterSupport?: {
 		brackets?: any;
 		docComment?: {

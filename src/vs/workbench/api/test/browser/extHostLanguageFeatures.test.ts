@@ -43,6 +43,10 @@ import { ITextModel, EndOfLineSequence } from '../../../../editor/common/model.j
 import { getColors } from '../../../../editor/contrib/colorPicker/browser/color.js';
 import { CancellationToken } from '../../../../base/common/cancellation.js';
 import { nullExtensionDescription as defaultExtension } from '../../../services/extensions/common/extensions.js';
+import { LanguageService } from '../../../../editor/common/services/languageService.js';
+import { ILanguageService } from '../../../../editor/common/languages/language.js';
+import { ILanguageConfigurationService } from '../../../../editor/common/languages/languageConfigurationRegistry.js';
+import { TestLanguageConfigurationService } from '../../../../editor/test/common/modes/testLanguageConfigurationService.js';
 import { provideSelectionRanges } from '../../../../editor/contrib/smartSelect/browser/smartSelect.js';
 import { mock } from '../../../../base/test/common/mock.js';
 import { IEditorWorkerService } from '../../../../editor/common/services/editorWorker.js';
@@ -94,6 +98,8 @@ suite('ExtHostLanguageFeatures', function () {
 			instantiationService = new TestInstantiationService();
 			instantiationService.stub(IMarkerService, MarkerService);
 			instantiationService.set(ILanguageFeaturesService, languageFeaturesService);
+			instantiationService.set(ILanguageService, disposables.add(new LanguageService()));
+			instantiationService.set(ILanguageConfigurationService, disposables.add(new TestLanguageConfigurationService()));
 			instantiationService.set(IUriIdentityService, new class extends mock<IUriIdentityService>() {
 				override asCanonicalUri(uri: URI): URI {
 					return uri;
@@ -153,6 +159,31 @@ suite('ExtHostLanguageFeatures', function () {
 	});
 
 	ensureNoDisposablesAreLeakedInTestSuite();
+
+	suite('setLanguageConfiguration - onDeleteRules', () => {
+
+		const onDeleteRules = [{ beforeText: /^\s*\/\/\//, afterText: /^\s*\/\/\// }];
+
+		test('onDeleteRules reach the language configuration when the proposal is enabled', async () => {
+			const extension = { ...defaultExtension, enabledApiProposals: ['languageConfigurationOnDelete' as const] };
+			disposables.add(instantiationService.get(ILanguageService).registerLanguage({ id: 'testLangEnabled' }));
+			disposables.add(extHost.setLanguageConfiguration(extension, 'testLangEnabled', { onDeleteRules }));
+			await rpcProtocol.sync();
+
+			const service = instantiationService.get(ILanguageConfigurationService);
+			assert.strictEqual(service.getLanguageConfiguration('testLangEnabled').getOnDeleteTextToStrip('/// a', '/// b'), 3);
+			assert.strictEqual(service.getLanguageConfiguration('testLangEnabled').getOnDeleteTextToStrip('foo', '/// b'), 0);
+		});
+
+		test('onDeleteRules are ignored when the proposal is not enabled', async () => {
+			disposables.add(instantiationService.get(ILanguageService).registerLanguage({ id: 'testLangDisabled' }));
+			disposables.add(extHost.setLanguageConfiguration(defaultExtension, 'testLangDisabled', { onDeleteRules }));
+			await rpcProtocol.sync();
+
+			const service = instantiationService.get(ILanguageConfigurationService);
+			assert.strictEqual(service.getLanguageConfiguration('testLangDisabled').getOnDeleteTextToStrip('/// a', '/// b'), 0);
+		});
+	});
 
 	test('DocumentDropEdits does not cache an empty edit array without release IDs', async () => {
 		disposables.add(extHost.registerDocumentOnDropEditProvider(defaultExtension, defaultSelector, {

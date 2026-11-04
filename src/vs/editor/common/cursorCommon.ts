@@ -167,6 +167,14 @@ export class CursorConfiguration {
 		this.blockCommentStartToken = commentsConfiguration?.blockCommentStartToken ?? null;
 	}
 
+	/**
+	 * The number of characters to strip from the start of `nextLineText` when it is joined
+	 * to `currentLineText`, as declared by the language's `onDeleteRules`.
+	 */
+	public getOnDeleteTextToStrip(currentLineText: string, nextLineText: string): number {
+		return this.languageConfigurationService.getLanguageConfiguration(this._languageId).getOnDeleteTextToStrip(currentLineText, nextLineText);
+	}
+
 	public get electricChars() {
 		if (!this._electricChars) {
 			this._electricChars = {};

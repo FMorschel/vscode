@@ -19,7 +19,7 @@ import { Range as EditorRange, IRange } from '../../../editor/common/core/range.
 import { Selection } from '../../../editor/common/core/selection.js';
 import * as languages from '../../../editor/common/languages.js';
 import { ILanguageService } from '../../../editor/common/languages/language.js';
-import { IndentationRule, LanguageConfiguration, OnEnterRule } from '../../../editor/common/languages/languageConfiguration.js';
+import { IndentationRule, LanguageConfiguration, OnDeleteRule, OnEnterRule } from '../../../editor/common/languages/languageConfiguration.js';
 import { ILanguageConfigurationService } from '../../../editor/common/languages/languageConfigurationRegistry.js';
 import { ITextModel } from '../../../editor/common/model.js';
 import { ILanguageFeaturesService } from '../../../editor/common/services/languageFeatures.js';
@@ -33,7 +33,7 @@ import * as callh from '../../contrib/callHierarchy/common/callHierarchy.js';
 import * as search from '../../contrib/search/common/search.js';
 import * as typeh from '../../contrib/typeHierarchy/common/typeHierarchy.js';
 import { extHostNamedCustomer, IExtHostContext } from '../../services/extensions/common/extHostCustomers.js';
-import { ExtHostContext, ExtHostLanguageFeaturesShape, HoverWithId, ICallHierarchyItemDto, ICodeActionDto, ICodeActionProviderMetadataDto, IdentifiableInlineCompletion, IdentifiableInlineCompletions, IDocumentDropEditDto, IDocumentDropEditProviderMetadata, IDocumentFilterDto, IIndentationRuleDto, IInlayHintDto, IInlineCompletionChangeHintDto, IInlineCompletionModelInfoDto, IInlineCompletionProviderOptionDto, ILanguageConfigurationDto, ILanguageWordDefinitionDto, ILinkDto, ILocationDto, ILocationLinkDto, IOnEnterRuleDto, IPasteEditDto, IPasteEditProviderMetadataDto, IRegExpDto, ISignatureHelpProviderMetadataDto, ISuggestDataDto, ISuggestDataDtoField, ISuggestResultDtoField, ITypeHierarchyItemDto, IWorkspaceSymbolDto, MainContext, MainThreadLanguageFeaturesShape } from '../common/extHost.protocol.js';
+import { ExtHostContext, ExtHostLanguageFeaturesShape, HoverWithId, ICallHierarchyItemDto, ICodeActionDto, ICodeActionProviderMetadataDto, IdentifiableInlineCompletion, IdentifiableInlineCompletions, IDocumentDropEditDto, IDocumentDropEditProviderMetadata, IDocumentFilterDto, IIndentationRuleDto, IInlayHintDto, IInlineCompletionChangeHintDto, IInlineCompletionModelInfoDto, IInlineCompletionProviderOptionDto, ILanguageConfigurationDto, ILanguageWordDefinitionDto, ILinkDto, ILocationDto, ILocationLinkDto, IOnDeleteRuleDto, IOnEnterRuleDto, IPasteEditDto, IPasteEditProviderMetadataDto, IRegExpDto, ISignatureHelpProviderMetadataDto, ISuggestDataDto, ISuggestDataDtoField, ISuggestResultDtoField, ITypeHierarchyItemDto, IWorkspaceSymbolDto, MainContext, MainThreadLanguageFeaturesShape } from '../common/extHost.protocol.js';
 import { InlineCompletionEndOfLifeReasonKind } from '../common/extHostTypes.js';
 import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
 import { DataChannelForwardingTelemetryService, forwardToChannelIf, isCopilotLikeExtension } from '../../../platform/dataChannel/browser/forwardingTelemetryService.js';
@@ -967,6 +967,13 @@ export class MainThreadLanguageFeatures extends Disposable implements MainThread
 		return onEnterRules.map(MainThreadLanguageFeatures._reviveOnEnterRule);
 	}
 
+	private static _reviveOnDeleteRules(onDeleteRules: IOnDeleteRuleDto[]): OnDeleteRule[] {
+		return onDeleteRules.map(onDeleteRule => ({
+			beforeText: onDeleteRule.beforeText ? MainThreadLanguageFeatures._reviveRegExp(onDeleteRule.beforeText) : undefined,
+			afterText: MainThreadLanguageFeatures._reviveRegExp(onDeleteRule.afterText),
+		}));
+	}
+
 	$setLanguageConfiguration(handle: number, languageId: string, _configuration: ILanguageConfigurationDto): void {
 
 		const configuration: LanguageConfiguration = {
@@ -975,6 +982,7 @@ export class MainThreadLanguageFeatures extends Disposable implements MainThread
 			wordPattern: _configuration.wordPattern ? MainThreadLanguageFeatures._reviveRegExp(_configuration.wordPattern) : undefined,
 			indentationRules: _configuration.indentationRules ? MainThreadLanguageFeatures._reviveIndentationRule(_configuration.indentationRules) : undefined,
 			onEnterRules: _configuration.onEnterRules ? MainThreadLanguageFeatures._reviveOnEnterRules(_configuration.onEnterRules) : undefined,
+			onDeleteRules: _configuration.onDeleteRules ? MainThreadLanguageFeatures._reviveOnDeleteRules(_configuration.onDeleteRules) : undefined,
 
 			autoClosingPairs: undefined,
 			surroundingPairs: undefined,

@@ -246,6 +246,7 @@ function combineLanguageConfigurations(configs: LanguageConfiguration[]): Langua
 		wordPattern: undefined,
 		indentationRules: undefined,
 		onEnterRules: undefined,
+		onDeleteRules: undefined,
 		autoClosingPairs: undefined,
 		surroundingPairs: undefined,
 		autoCloseBefore: undefined,
@@ -260,6 +261,7 @@ function combineLanguageConfigurations(configs: LanguageConfiguration[]): Langua
 			wordPattern: entry.wordPattern || result.wordPattern,
 			indentationRules: entry.indentationRules || result.indentationRules,
 			onEnterRules: entry.onEnterRules || result.onEnterRules,
+			onDeleteRules: entry.onDeleteRules || result.onDeleteRules,
 			autoClosingPairs: entry.autoClosingPairs || result.autoClosingPairs,
 			surroundingPairs: entry.surroundingPairs || result.surroundingPairs,
 			autoCloseBefore: entry.autoCloseBefore || result.autoCloseBefore,
@@ -434,6 +436,27 @@ export class ResolvedLanguageConfiguration {
 			beforeEnterText,
 			afterEnterText
 		);
+	}
+
+	/**
+	 * Returns the number of characters to strip from the start of `nextLineText`
+	 * when it is joined to `currentLineText` by deleting the line break between them.
+	 */
+	public getOnDeleteTextToStrip(currentLineText: string, nextLineText: string): number {
+		for (const rule of this.underlyingConfig.onDeleteRules ?? []) {
+			if (rule.beforeText) {
+				rule.beforeText.lastIndex = 0; // To disable the effect of the "g" flag.
+				if (!rule.beforeText.test(currentLineText)) {
+					continue;
+				}
+			}
+			rule.afterText.lastIndex = 0; // To disable the effect of the "g" flag.
+			const match = rule.afterText.exec(nextLineText);
+			if (match && match.index === 0 && match[0].length > 0) {
+				return match[0].length;
+			}
+		}
+		return 0;
 	}
 
 	public getAutoClosingPairs(): AutoClosingPairs {
