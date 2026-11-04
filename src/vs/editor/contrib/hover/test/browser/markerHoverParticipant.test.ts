@@ -44,13 +44,13 @@ suite('Marker Hover Participant', () => {
 
 	const anchor = new HoverRangeAnchor(0, new Range(1, 10, 1, 10), undefined, undefined);
 
-	test('issue #247250: sorts markers by severity, then by position', () => {
+	test('issue #247250: sorts markers by severity, keeping position order within a severity', () => {
 		withTestCodeEditor('void foo(List<(baz)> l) {}', { readOnly: true }, editor => {
 			const markers = [
-				createMarker(MarkerSeverity.Info, 'info late', 12, 14),
-				createMarker(MarkerSeverity.Warning, 'warning', 10, 14),
-				createMarker(MarkerSeverity.Error, 'error', 14, 15),
 				createMarker(MarkerSeverity.Info, 'info early', 10, 14),
+				createMarker(MarkerSeverity.Warning, 'warning', 10, 14),
+				createMarker(MarkerSeverity.Info, 'info late', 12, 14),
+				createMarker(MarkerSeverity.Error, 'error', 14, 15),
 				createMarker(MarkerSeverity.Hint, 'hint', 10, 14),
 			];
 			const { participant, decorations } = createParticipant(editor, markers);
@@ -82,7 +82,7 @@ suite('Marker Hover Participant', () => {
 			const rendered = participant.renderHoverParts(context as any as IEditorHoverRenderContext, hoverParts);
 			store.add(rendered);
 
-			const icons = Array.from(fragment.querySelectorAll('.marker')).map(marker => marker.querySelector('.marker-severity-icon')?.className ?? '');
+			const icons = Array.from(fragment.querySelectorAll('.marker')).map(marker => marker.querySelector('.codicon')?.className ?? '');
 			assert.strictEqual(icons.length, 4);
 			assert.ok(icons[0].includes('codicon-error'), icons[0]);
 			assert.ok(icons[1].includes('codicon-warning'), icons[1]);

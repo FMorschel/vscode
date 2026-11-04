@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 .monaco-editor .zone-widget .codicon.codicon-error,
+.monaco-hover .marker .codicon.codicon-error,
 .markers-panel .marker-icon.error, .markers-panel .marker-icon .codicon.codicon-error,
 .text-search-provider-messages .providerMessage .codicon.codicon-error,
 .extensions-viewlet > .extensions .codicon.codicon-error,
@@ -13,6 +14,7 @@
 }
 
 .monaco-editor .zone-widget .codicon.codicon-warning,
+.monaco-hover .marker .codicon.codicon-warning,
 .markers-panel .marker-icon.warning, .markers-panel .marker-icon .codicon.codicon-warning,
 .text-search-provider-messages .providerMessage .codicon.codicon-warning,
 .extensions-viewlet > .extensions .codicon.codicon-warning,
@@ -22,6 +24,7 @@
 }
 
 .monaco-editor .zone-widget .codicon.codicon-info,
+.monaco-hover .marker .codicon.codicon-info,
 .markers-panel .marker-icon.info, .markers-panel .marker-icon .codicon.codicon-info,
 .text-search-provider-messages .providerMessage .codicon.codicon-info,
 .extensions-viewlet > .extensions .codicon.codicon-info,
